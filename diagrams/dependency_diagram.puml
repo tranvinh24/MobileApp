@@ -1,0 +1,110 @@
+@startuml BookStore_Dependency_Diagram
+!define RED_ARROW #FF0000
+!define INDIRECT_ARROW #FFA500
+
+skinparam classAttributeIconSize 0
+skinparam backgroundColor #FFFFFF
+skinparam class {
+    BackgroundColor #E8F5E9
+    BorderColor #2E7D32
+    ArrowColor RED_ARROW
+    FontSize 14
+}
+
+title BookStore Monolithic Architecture\nDependency Diagram (RED = Tight Coupling)
+
+class Customer {
+  - id: Long
+  - name: String
+  - email: String
+  - membership_tier: String
+  --
+  + get_discount(): Decimal
+  + is_premium(): Boolean
+}
+
+class Book {
+  - id: Long
+  - title: String
+  - author: String
+  - price: Decimal
+  - stock: Integer
+  --
+  + update_stock(): void
+  + get_price(): Decimal
+}
+
+class Cart {
+  - id: Long
+  - customer_id: Long
+  - created_at: DateTime
+  - updated_at: DateTime
+  --
+  + calculate_total(): Decimal
+  + apply_discount(): Decimal
+  + clear(): void
+}
+
+class CartItem {
+  - id: Long
+  - cart_id: Long
+  - book_id: Long
+  - quantity: Integer
+  - price: Decimal
+  --
+  + calculate_subtotal(): Decimal
+  + update_quantity(): void
+}
+
+' Direct Dependencies (RED ARROWS)
+Cart -[RED_ARROW]-> Customer : "customer_id\n(Foreign Key)\n[TIGHT COUPLING]"
+CartItem -[RED_ARROW]-> Cart : "cart_id\n(Foreign Key)\n[TIGHT COUPLING]"
+CartItem -[RED_ARROW]-> Book : "book_id\n(Foreign Key)\n[TIGHT COUPLING]"
+
+' Indirect Dependencies (ORANGE DASHED)
+CartItem .[INDIRECT_ARROW].> Customer : "accesses via\nCart.customer\n[BUSINESS LOGIC\nCOUPLING]"
+Cart .[INDIRECT_ARROW].> Book : "accesses via\nCartItem.book\n[PRICING LOGIC\nCOUPLING]"
+
+note right of Customer
+  <b>Customer Model</b>
+  Change in membership_tier
+  propagates to:
+  • Cart (discount calculation)
+  • CartItem (pricing)
+  • Order (historical pricing)
+  • All views using pricing
+end note
+
+note bottom of CartItem
+  <b>CartItem is Most Coupled</b>
+  Depends on:
+  • Cart (direct FK)
+  • Book (direct FK)
+  • Customer (via Cart)
+  
+  <color:red><b>Any change to Customer,
+  Cart, or Book requires
+  CartItem modification!</b></color>
+end note
+
+note left of Cart
+  <b>Cart.calculate_total()</b>
+  
+  def calculate_total(self):
+      # TIGHT COUPLING
+      discount = self.customer
+                    .get_discount()
+      total = sum(item.subtotal 
+                  for item in 
+                  self.items.all())
+      return total * (1 - discount)
+end note
+
+legend right
+  |= Symbol |= Meaning |
+  | <color:RED>━━━━►</color> | Direct Foreign Key (Tight Coupling) |
+  | <color:ORANGE>- - - ►</color> | Indirect Business Logic Dependency |
+  | <color:RED><b>RED ARROWS</b></color> | <b>Indicates Architectural Debt</b> |
+endlegend
+
+@enduml

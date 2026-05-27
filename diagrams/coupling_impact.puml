@@ -1,0 +1,165 @@
+@startuml Coupling_Impact_Change_Propagation
+
+skinparam backgroundColor #FFFFFF
+skinparam packageStyle rectangle
+
+title Change Propagation Analysis\nAdding Multiple Membership Tiers Feature
+
+package "Database Layer" #FFE5E5 {
+  class "Customer\n(MODIFIED)" as customer #FFCCCC {
+    - id: Long
+    - name: String
+    - email: String
+    <color:red><s>- membership_tier: String</s></color>
+    --
+    <color:green>+ get_active_tiers(): List</color>
+  }
+  
+  class "<color:green>CustomerMembership\n(NEW)</color>" as custmem #CCFFCC {
+    <color:green>- id: Long</color>
+    <color:green>- customer_id: Long</color>
+    <color:green>- tier_id: Long</color>
+    <color:green>- assigned_at: DateTime</color>
+  }
+  
+  class "<color:green>MembershipTier\n(NEW)</color>" as tier #CCFFCC {
+    <color:green>- id: Long</color>
+    <color:green>- name: String</color>
+    <color:green>- discount_rate: Decimal</color>
+    <color:green>- valid_from: DateTime</color>
+    <color:green>- valid_until: DateTime</color>
+  }
+}
+
+package "Business Logic Layer" #FFE5E5 {
+  class "Cart\n(MODIFIED)" as cart #FFCCCC {
+    - customer_id: Long
+    --
+    <color:red><s>def calculate_total():</s></color>
+    <color:red><s>  discount = customer.tier</s></color>
+    
+    <color:green>def calculate_total():</color>
+    <color:green>  tiers = customer.get_active_tiers()</color>
+    <color:green>  discount = max(tier.discount_rate</color>
+    <color:green>             for tier in tiers)</color>
+  }
+  
+  class "CartItem\n(MODIFIED)" as cartitem #FFCCCC {
+    --
+    <color:red><s>def calculate_subtotal():</s></color>
+    <color:red><s>  if customer.tier == 'PREMIUM':</s></color>
+    <color:red><s>    return price * 0.9</s></color>
+    
+    <color:green>def calculate_subtotal():</color>
+    <color:green>  discount_service = </color>
+    <color:green>    DiscountService(customer)</color>
+    <color:green>  return discount_service.apply(price)</color>
+  }
+  
+  class "<color:green>DiscountService\n(NEW)</color>" as discount #CCFFCC {
+    <color:green>+ calculate_discount(customer, amount)</color>
+    <color:green>+ get_applicable_tiers(customer, date)</color>
+    <color:green>+ apply_time_based_rules()</color>
+  }
+}
+
+package "Presentation Layer" #FFE5E5 {
+  class "add_to_cart()\nView (MODIFIED)" as addcart #FFCCCC {
+    <color:red><s>if customer.membership_tier == 'VIP':</s></color>
+    <color:red><s>  price = book.price * 0.8</s></color>
+    
+    <color:green>discount_svc = DiscountService()</color>
+    <color:green>price = discount_svc.calculate(</color>
+    <color:green>  customer, book.price)</color>
+  }
+  
+  class "checkout()\nView (MODIFIED)" as checkoutview #FFCCCC
+  
+  class "account_info.html\nTemplate (MODIFIED)" as template #FFCCCC {
+    <color:red><s>{{ customer.membership_tier }}</s></color>
+    
+    <color:green>{% for tier in customer.active_tiers %}</color>
+    <color:green>  {{ tier.name }}</color>
+    <color:green>{% endfor %}</color>
+  }
+}
+
+' Dependencies showing change propagation (RED ARROWS)
+customer -[#FF0000]-> custmem : "requires\nnew table"
+customer -[#FF0000]-> tier : "requires\nnew table"
+cart -[#FF0000]-> customer : "must update\nlogic"
+cartitem -[#FF0000]-> customer : "must update\nlogic"
+cart -[#FF0000]-> discount : "must use\nnew service"
+cartitem -[#FF0000]-> discount : "must use\nnew service"
+addcart -[#FF0000]-> discount : "must update\nview logic"
+checkoutview -[#FF0000]-> discount : "must update\nview logic"
+template -[#FF0000]-> customer : "must update\ntemplate"
+
+note top of customer
+  <b><color:red>CHANGE ORIGIN</color></b>
+  
+  New Requirement:
+  "Support multiple membership tiers
+  with time-based discount policies"
+  
+  <b>Estimated Change Cost: 40 hours</b>
+end note
+
+note bottom of discount
+  <b><color:green>NEW SERVICE REQUIRED</color></b>
+  
+  Must implement:
+  • Time-based discount calculation
+  • Multiple tier priority logic
+  • Caching for performance
+  • Historical discount tracking
+  
+  Development: 12 hours
+  Testing: 8 hours
+end note
+
+note right of cart
+  <b>Files Modified: 15+</b>
+  
+  Models:
+  • customer.py
+  • cart.py
+  • cartitem.py
+  • order.py (not shown)
+  
+  Services:
+  • discount_service.py (new)
+  • pricing_service.py
+  
+  Views:
+  • cart_views.py
+  • checkout_views.py
+  • account_views.py
+  
+  Templates:
+  • cart.html
+  • checkout.html
+  • account_info.html
+  • order_history.html
+  
+  Tests:
+  • test_customer.py
+  • test_cart.py
+  • test_pricing.py
+  • ...etc
+end note
+
+legend right
+  |= Color |= Meaning |
+  | <color:red>Red (Modified)</color> | Existing component requires changes |
+  | <color:green>Green (New)</color> | New component must be created |
+  | <color:red><b>━━━━►</b></color> | Change propagation path |
+  
+  <b>Risk Level: HIGH</b>
+  • 15+ files modified
+  • Database migration required
+  • Full regression testing needed
+  • High probability of bugs
+endlegend
+
+@enduml

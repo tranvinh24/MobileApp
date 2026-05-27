@@ -1,0 +1,89 @@
+@startuml Monolithic_Scaling_Problem
+
+skinparam backgroundColor #FFFFFF
+skinparam componentStyle rectangle
+
+title Monolithic Scaling Problem\nWhy Fine-Grained Scaling is Impossible
+
+package "Load Balancer" {
+  [LB] #LightBlue
+}
+
+package "Monolithic Instance 1\n(All Features: 100%)" {
+  component [Search: 33%\nNeeds: CPU] #FFE5E5
+  component [Cart: 33%\nNeeds: Memory] #FFE5E5
+  component [Checkout: 33%\nNeeds: I/O] #FFE5E5
+}
+
+package "Monolithic Instance 2\n(All Features: 100%)" {
+  component [Search: 33%\nNeeds: CPU] #FFE5E5
+  component [Cart: 33%\nNeeds: Memory] #FFE5E5
+  component [Checkout: 33%\nNeeds: I/O] #FFE5E5
+}
+
+package "Monolithic Instance 3\n(All Features: 100%)" {
+  component [Search: 33%\nNeeds: CPU] #FFE5E5
+  component [Cart: 33%\nNeeds: Memory] #FFE5E5
+  component [Checkout: 33%\nNeeds: I/O] #FFE5E5
+}
+
+database "Database\n(Shared Bottleneck)" {
+  [MySQL] #FFFFCC
+}
+
+[LB] -down-> [Search: 33%\nNeeds: CPU]
+[LB] -down-> [Search: 33%\nNeeds: CPU]
+[LB] -down-> [Search: 33%\nNeeds: CPU]
+
+[Search: 33%\nNeeds: CPU] -down-> [MySQL]
+[Cart: 33%\nNeeds: Memory] -down-> [MySQL]
+[Checkout: 33%\nNeeds: I/O] -down-> [MySQL]
+
+note right of [Search: 33%\nNeeds: CPU]
+  <b><color:red>PROBLEM 1: Over-Provisioning</color></b>
+  
+  Actual Traffic Distribution:
+  • Search: 80% (needs scaling)
+  • Cart: 15%
+  • Checkout: 5%
+  
+  But each instance allocates:
+  • 33% to each component
+  
+  <b>Waste: 46% per instance</b>
+end note
+
+note bottom of [MySQL]
+  <b><color:red>PROBLEM 2: Shared Database</color></b>
+  
+  All instances compete for:
+  • Same connection pool (20 connections)
+  • Same disk I/O
+  • Same query queue
+  
+  Heavy search queries block checkout transactions!
+  
+  <b>Cannot scale independently</b>
+end note
+
+rectangle "Ideal Microservices (for comparison)" #E8F5E9 {
+  component [Search\nService\n×24 instances] #90EE90
+  component [Cart\nService\n×5 instances] #90EE90
+  component [Checkout\nService\n×1 instance] #90EE90
+}
+
+note bottom of "Ideal Microservices (for comparison)"
+  <b><color:green>MICROSERVICES SOLUTION:</color></b>
+  
+  • Search: 24 instances (80% traffic)
+  • Cart: 5 instances (15% traffic)
+  • Checkout: 1 instance (5% traffic)
+  
+  Total: 30 equivalent instances
+  <b>Waste: 0%</b>
+  
+  Each service has its own database
+  No resource contention
+end note
+
+@enduml

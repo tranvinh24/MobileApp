@@ -1,0 +1,107 @@
+@startuml Deployment_Risk_Cascade
+
+skinparam backgroundColor #FFFFFF
+
+title Deployment Risk: Cascade Effect\nHow a Single Bug Can Crash Everything
+
+actor "Developer" as dev
+participant "CartItem\nModel" as cartitem #FFE5E5
+participant "Cart\nModule" as cart #FFE5E5
+participant "Book Search\nView" as search #FFE5E5
+participant "User Auth\nMiddleware" as auth #FFE5E5
+participant "Checkout\nView" as checkout #FFE5E5
+database "Database" as db
+
+dev -> cartitem : Fix bug in\ncalculate_subtotal()
+activate cartitem
+
+note over cartitem
+  <b>Step 1: Bug Fix</b>
+  Changed 2 lines of code
+  in CartItem.calculate_subtotal()
+end note
+
+cartitem -> cart : Requires\nREDEPLOY
+activate cart
+
+note over cart #FFE5E5
+  <b>Step 2: Monolithic Deployment</b>
+  Cannot deploy CartItem alone
+  Must redeploy ENTIRE application
+end note
+
+cart -> search : All modules\nrestarted
+activate search
+
+note over search #FFCCCC
+  <b><color:red>Step 3: Unexpected Bug</color></b>
+  Cart.calculate_total() has
+  runtime error during deployment
+  
+  def calculate_total():
+      # Crashes due to None value
+      discount = self.customer.tier.rate
+end note
+
+search -> search : Template tries\nto render cart
+note right
+  <color:red><b>FAILURE CASCADE BEGINS</b></color>
+  
+  base.html includes:
+  {% include "cart_summary.html" %}
+  
+  This crashes because Cart
+  module is broken!
+end note
+deactivate search
+
+search -> db : Search query\nsucceeds
+activate db
+db --> search : Return books
+deactivate db
+
+search -> auth : Render template\n+ cart summary
+activate auth
+
+auth -> cart : Get cart for\nbase template
+note over auth,cart #FFCCCC
+  <color:red><b>CRASH!</b></color>
+  Exception in Cart.calculate_total()
+end note
+
+cart --> auth : <color:red>Exception</color>
+deactivate cart
+
+auth --> search : <color:red>500 Error</color>
+deactivate auth
+
+search -> dev : <color:red>Book search\nDOWN!</color>
+deactivate search
+
+note over dev
+  <color:red><b>IMPACT ANALYSIS</b></color>
+  
+  ❌ Book Search: 0% available
+  ❌ Cart Operations: 0% available
+  ❌ Checkout: 0% available
+  ⚠️  User Login: 50% available
+  ⚠️  Registration: 80% available
+  
+  <b>Overall Availability: ~20%</b>
+  
+  <b>Revenue Impact:</b>
+  • Zero checkout possible
+  • Users cannot browse books
+  • $10,000/hour revenue loss
+  
+  <b>Recovery Time:</b>
+  • Detect issue: 5 minutes
+  • Rollback decision: 5 minutes
+  • Execute rollback: 20 minutes
+  • Verify: 10 minutes
+  <b>Total downtime: 40 minutes</b>
+  
+  <b>Financial Loss: $6,667</b>
+end note
+
+@enduml
